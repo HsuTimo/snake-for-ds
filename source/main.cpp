@@ -8,15 +8,6 @@
 
 //Global variables
 u16 pressed;
-s16 initXPos = SCREEN_WIDTH/2;
-s16 initYPos = SCREEN_HEIGHT/2;
-s16 xPos = initXPos;
-s16 yPos = initYPos;
-s8 xOffset = 0;
-s8 yOffset = 0;
-s8 xVelocity = 1;
-s8 yVelocity = 0;
-s8 boxSize = 8;//Size of the boxes that the snake is made of. It must be a common factor of screen width (256) and screen height (192)
 s8 frameCounter;
 u16 bigFoodFrameCounter;
 u16 playerScore;
@@ -34,17 +25,13 @@ void ShowMenu();
 void DrawBox(s16 xPos, s16 yPos, u8 width, u8 height, u8 r, u8 g, u8 b);
 void topScreenInfo(u16 score);
 void SetDefaults();
-void CheckControls();
 void PlayGameLoop();
-void CheckScreenEdges();//makes the snake come back around the other side when going off the edge of the screen
 void SetHighScore();//Sets the current score to the highscore if the current highscore has been beaten
 void LoadSaveFile();//Checks if a savefile exists and gets the data found in the savefile
 void CreateNewSaveFile();//Creates a new save file if there is no save file yet (SaveFileExists == false)
 void SaveHighScore();//Writes a new highscore to the savefile
 bool IsCollided(s16 x1, s16 y1, s16 x2, s16 y2, s8 size1, s8 size2);//Checks collision of two boxes
 u16 RandomU16(u16 minNo, u16 maxNo);//Generates a random u16 in a range
-u16 GenerateNewFoodXPos();
-u16 GenerateNewFoodYPos();
 
 //Struct for save file
 struct VariablesToSave {
@@ -54,27 +41,36 @@ u16 savedHighScore;
 //Classes
 class Snake{
     private:
+        const static u8 initXPos = SCREEN_WIDTH/2;
+        const static u8 initYPos = SCREEN_HEIGHT/2;
         const static u8 _DEFAULT_LENGTH = 4;
         const static u8 _MAX_LENGTH = 255;
     public:
+        s16 xPos = initXPos;
+        s16 yPos = initYPos;
+        s8 xOffset = 0;
+        s8 yOffset = 0;
+        s8 xVelocity = 1;
+        s8 yVelocity = 0;
+        s8 boxSize = 8;
         u8 snakeLength;
         s16 xPosArr[_MAX_LENGTH];
         s16 xPosPrev[_MAX_LENGTH];
         s16 yPosArr[_MAX_LENGTH];
         s16 yPosPrev[_MAX_LENGTH];
-        Snake(u16 xPos, u16 yPos){
+        Snake(){
             snakeLength = _DEFAULT_LENGTH;
             for(u8 i = 0;i<snakeLength;i++){
                 yPosPrev[i] = yPos;
                 xPosPrev[i] = xPos - (boxSize * (1+i));
             }
         }
-        void drawSnake(s16 inputX, s16 inputY){
+        void drawSnake(){
             glBegin2D();
             for(u8 i = 0;i<snakeLength;i++){
                 if(i==0){
-                    xPosArr[i] = inputX;
-                    yPosArr[i] = inputY;
+                    xPosArr[i] = xPos;
+                    yPosArr[i] = yPos;
                     DrawBox(xPosArr[i],yPosArr[i],boxSize,boxSize,255,255,255);
                 }
                 else{
@@ -85,12 +81,36 @@ class Snake{
             }
             glEnd2D();
         }
+        void CheckInputs(){
+            if(KEY_UP & pressed && yVelocity == 0 && !buttonPressed){
+                yVelocity = -1;
+                xVelocity = 0;
+                buttonPressed = true;
+            }
+            else if(KEY_DOWN & pressed && yVelocity == 0 && !buttonPressed){
+                yVelocity = 1;
+                xVelocity = 0;
+                buttonPressed = true;
+            }
+            else if(KEY_LEFT & pressed && xVelocity == 0 && !buttonPressed){
+                yVelocity = 0;
+                xVelocity = -1;
+                buttonPressed = true;
+            }
+            else if(KEY_RIGHT & pressed && xVelocity == 0 && !buttonPressed){
+                yVelocity = 0;
+                xVelocity = 1;
+                buttonPressed = true;
+        }
+}
         void addBlock(){
             if(snakeLength<_MAX_LENGTH){
             snakeLength++;
             }
         }
         void updateSnake(){
+            xPos+=xOffset;
+            yPos+=yOffset;
             for(u8 i = 0;i<snakeLength;i++){
                 xPosPrev[i] = xPosArr[i];
                 yPosPrev[i] = yPosArr[i];
@@ -111,8 +131,28 @@ class Snake{
                 yPosArr[i] = yPosPrev[i];
             }
         }
+        void CheckScreenEdges(){
+            if(xPos>SCREEN_WIDTH-1){
+                xPos = 0;
+            }
+            else if(xPos<0){
+                xPos = SCREEN_WIDTH-boxSize;
+            }
+            else if(yPos>SCREEN_HEIGHT-1){
+                yPos = 0;
+            }
+            else if(yPos<0){
+                yPos = SCREEN_HEIGHT-boxSize;
+            }
+        }
         void resetSnake(){
             snakeLength = _DEFAULT_LENGTH;
+            xOffset = 0;
+            yOffset = 0;
+            xVelocity = 1;
+            yVelocity = 0;
+            xPos = initXPos;
+            yPos = initYPos;
             for(u8 i = 0;i<snakeLength;i++){
                 yPosPrev[i] = initYPos;
                 xPosPrev[i] = initXPos - (boxSize * (1+i));
@@ -151,7 +191,7 @@ public:
         foodXPos = GenerateNewFoodXPos();
         foodYPos = GenerateNewFoodYPos();
         for(u8 i = 0; i<snake.snakeLength; i++){
-            if(IsCollided(foodXPos, foodYPos, snake.xPosArr[i], snake.yPosArr[i], foodSize, boxSize)){
+            if(IsCollided(foodXPos, foodYPos, snake.xPosArr[i], snake.yPosArr[i], foodSize, snake.boxSize)){
                 setFoodPos(snake);
             }
         }
@@ -161,15 +201,22 @@ public:
         foodXPos = inputXPos;
         foodYPos = inputYPos;
     }
+    u16 GenerateNewFoodXPos(){
+        return RandomU16(10,SCREEN_WIDTH-10);
+    }
+    u16 GenerateNewFoodYPos(){
+        return RandomU16(10,SCREEN_HEIGHT-10);
+    }
 };
 
-//Instances
-Snake playerSnake(xPos, yPos);
+//Class instances
+Snake playerSnake;
 Food snakeFood(8,10);
 Food bigSnakeFood(15,120);
 
 //Main function
 int main(void) {
+
     fatInitDefault();
     videoSetMode( MODE_5_3D );
     lcdMainOnBottom();
@@ -225,13 +272,7 @@ void SetDefaults(){
     playerScore = 0;
     bigSnakeFood.setFoodPos(300,300);
     snakeFood.setFoodPos(20,20);
-    xOffset = 0;
-    yOffset = 0;
-    xVelocity = 1;
-    yVelocity = 0;
     buttonPressed = false;
-    xPos = initXPos;
-    yPos = initYPos;
     playerSnake.resetSnake();
     gameOver = false;
 }
@@ -239,10 +280,8 @@ void PlayGameLoop(){
         frameCounter++;
         bigFoodFrameCounter++;
         topScreenInfo(highScore,playerScore);
-        xOffset = 0;
-        yOffset = 0;
-        CheckControls();
-        CheckScreenEdges();
+        playerSnake.CheckInputs();
+        playerSnake.CheckScreenEdges();
         if(bigFoodFrameCounter==600&&!gameOver){
             bigSnakeFood.setFoodPos(playerSnake);
         }
@@ -252,30 +291,30 @@ void PlayGameLoop(){
         }
 		if(frameCounter==6&&!gameOver){
             buttonPressed = false;
-            xOffset = xVelocity*boxSize;
-            yOffset = yVelocity*boxSize;
-            playerSnake.updateSnake();
-            if(IsCollided(xPos,yPos,snakeFood.foodXPos,snakeFood.foodYPos,boxSize,snakeFood.foodSize)){
+            playerSnake.xOffset = playerSnake.xVelocity*playerSnake.boxSize;
+            playerSnake.yOffset = playerSnake.yVelocity*playerSnake.boxSize;
+
+            if(IsCollided(playerSnake.xPos,playerSnake.yPos,snakeFood.foodXPos,snakeFood.foodYPos,playerSnake.boxSize,snakeFood.foodSize)){
                 playerSnake.addBlock();
                 playerScore+=snakeFood.scoreAmount;
                 snakeFood.setFoodPos(playerSnake);
             }
-            if(IsCollided(xPos,yPos,bigSnakeFood.foodXPos,bigSnakeFood.foodYPos,boxSize,bigSnakeFood.foodSize)){
+            if(IsCollided(playerSnake.xPos,playerSnake.yPos,bigSnakeFood.foodXPos,bigSnakeFood.foodYPos,playerSnake.boxSize,bigSnakeFood.foodSize)){
                 playerSnake.addBlock();
                 playerScore+=bigSnakeFood.scoreAmount;
                 bigSnakeFood.setFoodPos(300,300);
             }
             if(playerSnake.IsHitSelf()){
-                xOffset = 0;
-                yOffset = 0;
+                playerSnake.xOffset = 0;
+                playerSnake.yOffset = 0;
                 playerSnake.oneStepBack();
                 gameOver = true;
             }
+            playerSnake.updateSnake();
             frameCounter = 0;
         }
-		xPos+=xOffset;
-		yPos+=yOffset;
-		playerSnake.drawSnake(xPos,yPos);
+
+		playerSnake.drawSnake();
 		snakeFood.drawFood();
 		if(bigFoodFrameCounter<850&&!gameOver){
 		bigSnakeFood.drawFood(5,255,5);
@@ -328,42 +367,6 @@ void SaveHighScore(){
     fclose(savefile);
     }
 }
-void CheckControls(){
-    if(KEY_UP & pressed && yVelocity == 0 && !buttonPressed){
-        yVelocity = -1;
-        xVelocity = 0;
-        buttonPressed = true;
-    }
-    else if(KEY_DOWN & pressed && yVelocity == 0 && !buttonPressed){
-        yVelocity = 1;
-        xVelocity = 0;
-        buttonPressed = true;
-    }
-    else if(KEY_LEFT & pressed && xVelocity == 0 && !buttonPressed){
-        yVelocity = 0;
-        xVelocity = -1;
-        buttonPressed = true;
-    }
-    else if(KEY_RIGHT & pressed && xVelocity == 0 && !buttonPressed){
-        yVelocity = 0;
-        xVelocity = 1;
-        buttonPressed = true;
-    }
-}
-void CheckScreenEdges(){
-    if(xPos>SCREEN_WIDTH){
-            xPos = 0;
-    }
-    else if(xPos<0){
-            xPos = SCREEN_WIDTH-boxSize;
-    }
-    else if(yPos>SCREEN_HEIGHT){
-            yPos = 0;
-    }
-    else if(yPos<0){
-            yPos = SCREEN_HEIGHT-boxSize;
-    }
-}
 bool IsCollided(s16 x1, s16 y1, s16 x2, s16 y2, s8 size1, s8 size2){
     if(((x1>=x2&&x1<=x2+size2)||(x1<=x2&&x1+size1>=x2))&&((y1>=y2&&y1<=y2+size2)||(y1<=y2&&y1+size1>=y2))){
         return true;
@@ -372,12 +375,6 @@ bool IsCollided(s16 x1, s16 y1, s16 x2, s16 y2, s8 size1, s8 size2){
         return true;
     }
     return false;
-}
-u16 GenerateNewFoodXPos(){
-    return RandomU16(10,SCREEN_WIDTH-10);
-}
-u16 GenerateNewFoodYPos(){
-    return RandomU16(10,SCREEN_HEIGHT-10);
 }
 u16 RandomU16(u16 minNo, u16 maxNo){
     return rand()%(maxNo-minNo+1)+minNo;
